@@ -5,6 +5,7 @@ struct DashboardView: View {
     @ObservedObject var engine: MetricsEngine
     @ObservedObject var settings: AppSettings
 
+    var onOpenDetails: (() -> Void)?
     var onOpenSettings: () -> Void
     var onQuit: () -> Void
     var height: CGFloat = 760
@@ -105,6 +106,23 @@ struct DashboardView: View {
             }
 
             Spacer(minLength: 6)
+
+            if let onOpenDetails {
+                Button(action: onOpenDetails) {
+                    Text("详情")
+                        .font(.label(10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .frame(height: 26)
+                        .background {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.primary.opacity(0.06))
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("在独立窗口中打开详情")
+            }
 
             IconButton(systemImage: "gearshape.fill", help: "设置", action: onOpenSettings)
         }

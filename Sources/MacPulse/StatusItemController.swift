@@ -1,14 +1,17 @@
 import AppKit
 import Combine
+import SwiftUI
 import MacPulseCore
 
-final class StatusItemController: NSObject {
+final class StatusItemController: NSObject, NSPopoverDelegate {
     private let engine: MetricsEngine
     private let settings: AppSettings
     private let statusItem: NSStatusItem
     private let renderer = StatusItemRenderer()
+    private let popover = NSPopover()
     private var detailsWindowController: DashboardWindowController?
     private var cancellables: Set<AnyCancellable> = []
+    private var lastPopoverClose = Date.distantPast
 
     var onOpenSettings: (() -> Void)?
 
@@ -37,6 +40,10 @@ final class StatusItemController: NSObject {
             renderer.bottomAnchor.constraint(equalTo: button.bottomAnchor)
         ])
 
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+
         engine.$state
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refresh() }
@@ -56,25 +63,99 @@ final class StatusItemController: NSObject {
         if NSApp.currentEvent?.type == .rightMouseUp {
             showContextMenu()
         } else {
-            presentDetails()
+            togglePopover()
         }
     }
 
-    private func presentDetails() {
-        if detailsWindowController == nil {
-            detailsWindowController = DashboardWindowController(
+    private func togglePopover() {
+        if popover.isShown {
+            dismissPopover()
+            return
+        }
+        if Date().timeIntervalSince(lastPopoverClose) < 0.2 {
+            return
+        }
+        showPopover()
+    }
+
+    private func showPopover() {
+        guard let button = statusItem.button else { return }
+
+        if popover.contentViewController == nil {
+            let dashboard = DashboardView(
                 engine: engine,
                 settings: settings,
+                onOpenDetails: { [weak self] in
+                    self?.openDetailsFromPopover()
+                },
                 onOpenSettings: { [weak self] in
-                    self?.detailsWindowController?.close()
-                    self?.onOpenSettings?()
+                    self?.openSettings()
                 },
                 onQuit: {
                     NSApp.terminate(nil)
                 }
             )
+            popover.contentViewController = NSHostingController(rootView: dashboard)
+            popover.contentSize = NSSize(width: 440, height: 760)
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        engine.setDetailed(true)
+    }
+
+    private func dismissPopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+        syncDetailedSampling()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        lastPopoverClose = Date()
+        popover.contentViewController = nil
+        syncDetailedSampling()
+    }
+
+    private func openDetailsFromPopover() {
+        presentDetailsWindow()
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+    }
+
+    private func presentDetailsWindow() {
+        if detailsWindowController == nil {
+            detailsWindowController = DashboardWindowController(
+                engine: engine,
+                settings: settings,
+                onOpenSettings: { [weak self] in
+                    self?.openSettings()
+                },
+                onQuit: {
+                    NSApp.terminate(nil)
+                },
+                onClose: { [weak self] in
+                    self?.syncDetailedSampling()
+                }
+            )
         }
         detailsWindowController?.present()
+        engine.setDetailed(true)
+    }
+
+    private func openSettings() {
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+        detailsWindowController?.close()
+        onOpenSettings?()
+    }
+
+    /// 弹出面板和详情窗口任一可见时，都需要进程等详细采样。
+    private func syncDetailedSampling() {
+        let windowVisible = detailsWindowController?.window?.isVisible == true
+        engine.setDetailed(popover.isShown || windowVisible)
     }
 
     private func showContextMenu() {
@@ -103,12 +184,11 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func openDetailsFromMenu() {
-        presentDetails()
+        presentDetailsWindow()
     }
 
     @objc private func openSettingsFromMenu() {
-        detailsWindowController?.close()
-        onOpenSettings?()
+        openSettings()
     }
 
     @objc private func showAbout() {

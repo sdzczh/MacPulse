@@ -7,17 +7,20 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
     private let settings: AppSettings
     private let onOpenSettings: () -> Void
     private let onQuit: () -> Void
+    private let onClose: () -> Void
 
     init(
         engine: MetricsEngine,
         settings: AppSettings,
         onOpenSettings: @escaping () -> Void,
-        onQuit: @escaping () -> Void
+        onQuit: @escaping () -> Void,
+        onClose: @escaping () -> Void
     ) {
         self.engine = engine
         self.settings = settings
         self.onOpenSettings = onOpenSettings
         self.onQuit = onQuit
+        self.onClose = onClose
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 440, height: 760),
@@ -52,7 +55,6 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
             window.contentViewController = NSHostingController(rootView: dashboard)
         }
 
-        engine.setDetailed(true)
         NSApp.activate(ignoringOtherApps: true)
         if window.isMiniaturized {
             window.deminiaturize(nil)
@@ -62,8 +64,13 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        engine.setDetailed(false)
-        // 关闭后释放 SwiftUI 视图树，避免隐藏窗口持续跟随采样刷新。
-        window?.contentViewController = nil
+        // 关闭动画结束后释放 SwiftUI 视图树，并同步详细采样状态。
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.window?.isVisible == false {
+                self.window?.contentViewController = nil
+            }
+            self.onClose()
+        }
     }
 }
