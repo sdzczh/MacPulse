@@ -225,8 +225,10 @@ func testModels() {
 
     var history = MetricsHistory()
     history.capacity = 3
+    let baseDate = Date(timeIntervalSince1970: 1_000)
     for index in 0..<5 {
         var snapshot = SystemSnapshot()
+        snapshot.sampledAt = baseDate.addingTimeInterval(Double(index))
         snapshot.cpu.totalUsage = Double(index) / 10
         snapshot.memory.activeBytes = UInt64(index)
         snapshot.network.downloadBytesPerSecond = Double(index * 100)
@@ -236,6 +238,11 @@ func testModels() {
     checkEqual(history.cpu, [0.2, 0.3, 0.4], "history trims to capacity")
     checkEqual(history.memoryUsed, [2, 3, 4], "history trims memory samples")
     checkEqual(history.download, [200, 300, 400], "history trims network samples")
+    checkEqual(
+        history.timestamps,
+        [2, 3, 4].map { baseDate.addingTimeInterval(Double($0)) },
+        "history timestamps stay aligned with samples"
+    )
 
     var nanHistory = MetricsHistory()
     var nanSnapshot = SystemSnapshot()

@@ -10,7 +10,8 @@ public final class ProcessSampler {
         mach_timebase_info(&timebase)
     }
 
-    public func sample(now: Date = Date(), limit: Int = 8) -> [ProcessReading] {
+    /// `limit` 为 0 时返回全部可见进程；菜单栏与速览面板自行取前几条。
+    public func sample(now: Date = Date(), limit: Int = 0) -> [ProcessReading] {
         let interval = max(0.001, now.timeIntervalSince(previousTime ?? now))
         var pids = [pid_t](repeating: 0, count: 8192)
 
@@ -72,6 +73,7 @@ public final class ProcessSampler {
             return lhs.cpuLoad > rhs.cpuLoad
         }
 
+        guard limit > 0 else { return readings }
         return Array(readings.prefix(limit))
     }
 }

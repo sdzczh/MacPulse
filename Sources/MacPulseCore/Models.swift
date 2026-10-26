@@ -179,7 +179,7 @@ public struct SystemSnapshot: Equatable {
 }
 
 public struct MetricsHistory: Equatable {
-    public static let defaultCapacity = 90
+    public static let defaultCapacity = 300
 
     public var cpu: [Double] = []
     public var memoryUsed: [Double] = []
@@ -190,11 +190,13 @@ public struct MetricsHistory: Equatable {
     public var fan: [Double] = []
     public var diskRead: [Double] = []
     public var diskWrite: [Double] = []
+    public var timestamps: [Date] = []
     public var capacity: Int = MetricsHistory.defaultCapacity
 
     public init() {}
 
     public mutating func append(snapshot: SystemSnapshot) {
+        appendTimestamp(snapshot.sampledAt)
         append(snapshot.cpu.totalUsage, to: &cpu)
         append(Double(snapshot.memory.usedBytes), to: &memoryUsed)
         if let temp = snapshot.thermal.cpuAverageCelsius {
@@ -214,6 +216,13 @@ public struct MetricsHistory: Equatable {
         array.append(value.isFinite ? value : 0)
         if array.count > capacity {
             array.removeFirst(array.count - capacity)
+        }
+    }
+
+    private mutating func appendTimestamp(_ date: Date) {
+        timestamps.append(date)
+        if timestamps.count > capacity {
+            timestamps.removeFirst(timestamps.count - capacity)
         }
     }
 }
