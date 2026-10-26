@@ -179,7 +179,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         let state = engine.state
         let snapshot = state.snapshot
         let segments = fittedSegments(makeSegments(snapshot: snapshot))
-        renderer.update(segments: segments, cpuHistory: state.history.cpu)
+        renderer.update(segments: segments)
 
         let width = max(70, renderer.intrinsicContentSize.width)
         if abs(statusItem.length - width) > 0.5 {
@@ -237,7 +237,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
                 StatusSegment(
                     symbolName: "cpu",
                     text: MetricFormat.percent(snapshot.cpu.totalUsage),
-                    reserveText: "100%"
+                    reserveText: "100%",
+                    emphasized: true
                 )
             )
         }
@@ -319,7 +320,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
                 StatusSegment(
                     symbolName: "waveform.path.ecg",
                     text: "MacPulse",
-                    reserveText: "MacPulse"
+                    reserveText: "MacPulse",
+                    emphasized: true
                 )
             )
         }

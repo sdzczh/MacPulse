@@ -5,23 +5,22 @@ struct StatusSegment {
     let symbolName: String
     let text: String
     let reserveText: String
+    var emphasized: Bool = false
 }
 
 final class StatusItemRenderer: NSView {
     private(set) var segments: [StatusSegment] = []
-    private(set) var cpuHistory: [Double] = []
     private var symbolCache: [String: NSImage] = [:]
     private var measurementCache: [String: CGFloat] = [:]
 
-    private let textFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+    private let primaryTextFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+    private let secondaryTextFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
     private let height: CGFloat = 22
-    private let leading: CGFloat = 6
-    private let trailing: CGFloat = 6
-    private let sparklineWidth: CGFloat = 22
-    private let sparklineGap: CGFloat = 7
-    private let symbolWidth: CGFloat = 13
-    private let symbolGap: CGFloat = 3
-    private let segmentGap: CGFloat = 10
+    private let leading: CGFloat = 7
+    private let trailing: CGFloat = 7
+    private let symbolWidth: CGFloat = 11
+    private let symbolGap: CGFloat = 4
+    private let segmentGap: CGFloat = 9
 
     static let maximumWidth: CGFloat = 430
 
@@ -36,10 +35,9 @@ final class StatusItemRenderer: NSView {
     }
 
     /// 一次采样只做一次刷新，宽度不变时不再触发布局。
-    func update(segments: [StatusSegment], cpuHistory: [Double]) {
+    func update(segments: [StatusSegment]) {
         let widthChanged = contentWidth != fittingWidth(for: segments)
         self.segments = segments
-        self.cpuHistory = cpuHistory
         if widthChanged {
             invalidateIntrinsicContentSize()
         }
@@ -51,9 +49,12 @@ final class StatusItemRenderer: NSView {
     }
 
     func fittingWidth(for segments: [StatusSegment]) -> CGFloat {
-        var width = leading + sparklineWidth + sparklineGap + trailing
+        var width = leading + trailing
         for segment in segments {
-            let textWidth = max(measure(segment.text), measure(segment.reserveText))
+            let textWidth = max(
+                measure(segment.text, emphasized: segment.emphasized),
+                measure(segment.reserveText, emphasized: segment.emphasized)
+            )
             width += symbolWidth + symbolGap + textWidth + segmentGap
         }
         if !segments.isEmpty {
@@ -62,20 +63,25 @@ final class StatusItemRenderer: NSView {
         return max(60, ceil(width))
     }
 
-    private func measure(_ text: String) -> CGFloat {
-        if let cached = measurementCache[text] {
+    private func font(emphasized: Bool) -> NSFont {
+        emphasized ? primaryTextFont : secondaryTextFont
+    }
+
+    private func measure(_ text: String, emphasized: Bool) -> CGFloat {
+        let key = (emphasized ? "e|" : "r|") + text
+        if let cached = measurementCache[key] {
             return cached
         }
-        let width = (text as NSString).size(withAttributes: [.font: textFont]).width
+        let width = (text as NSString).size(withAttributes: [.font: font(emphasized: emphasized)]).width
         if measurementCache.count >= 512 {
             measurementCache.removeAll(keepingCapacity: true)
         }
-        measurementCache[text] = width
+        measurementCache[key] = width
         return width
     }
 
     private func textHeight() -> CGFloat {
-        ceil(textFont.ascender - textFont.descender + textFont.leading)
+        ceil(primaryTextFont.ascender - primaryTextFont.descender + primaryTextFont.leading)
     }
 
     private func symbolImage(_ name: String) -> NSImage? {
@@ -86,8 +92,8 @@ final class StatusItemRenderer: NSView {
             return cached
         }
 
-        let pointSize = NSSize(width: 12, height: 12)
-        let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        let pointSize = NSSize(width: 11, height: 11)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 10.5, weight: .regular)
             .applying(NSImage.SymbolConfiguration(hierarchicalColor: .labelColor))
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else {
@@ -135,28 +141,22 @@ final class StatusItemRenderer: NSView {
         context.setShouldAntialias(true)
 
         var x = leading
-        drawSparkline(in: NSRect(x: x, y: 5, width: sparklineWidth, height: 12))
-        x += sparklineWidth + sparklineGap
-
         let labelColor = NSColor.labelColor
         let lineHeight = textHeight()
 
-        for (index, segment) in segments.enumerated() {
-            if index > 0 {
-                let separatorX = x - segmentGap / 2
-                labelColor.withAlphaComponent(0.16).setFill()
-                NSBezierPath(rect: NSRect(x: separatorX, y: 6, width: 0.5, height: height - 12)).fill()
-            }
-
+        for segment in segments {
             if let image = symbolImage(segment.symbolName) {
-                let symbolRect = NSRect(x: x, y: (height - 12) / 2, width: 12, height: 12)
-                image.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 1)
+                let symbolRect = NSRect(x: x, y: (height - symbolWidth) / 2, width: symbolWidth, height: symbolWidth)
+                image.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 0.62)
             }
             x += symbolWidth + symbolGap
 
-            let cellWidth = max(measure(segment.text), measure(segment.reserveText))
+            let cellWidth = max(
+                measure(segment.text, emphasized: segment.emphasized),
+                measure(segment.reserveText, emphasized: segment.emphasized)
+            )
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: textFont,
+                .font: font(emphasized: segment.emphasized),
                 .foregroundColor: labelColor
             ]
             let textRect = NSRect(
@@ -168,41 +168,5 @@ final class StatusItemRenderer: NSView {
             (segment.text as NSString).draw(in: textRect, withAttributes: attributes)
             x += cellWidth + segmentGap
         }
-    }
-
-    private func drawSparkline(in rect: NSRect) {
-        let values = Array(cpuHistory.suffix(60))
-        let baseline = NSBezierPath()
-        baseline.move(to: NSPoint(x: rect.minX, y: rect.maxY - 0.5))
-        baseline.line(to: NSPoint(x: rect.maxX, y: rect.maxY - 0.5))
-        NSColor.labelColor.withAlphaComponent(0.15).setStroke()
-        baseline.lineWidth = 0.5
-        baseline.stroke()
-
-        guard values.count > 1 else {
-            let flat = NSBezierPath()
-            flat.move(to: NSPoint(x: rect.minX, y: rect.maxY - 1))
-            flat.line(to: NSPoint(x: rect.maxX, y: rect.maxY - 1))
-            NSColor.labelColor.withAlphaComponent(0.55).setStroke()
-            flat.lineWidth = 1
-            flat.stroke()
-            return
-        }
-
-        let path = NSBezierPath()
-        for (index, value) in values.enumerated() {
-            let fraction = min(1, max(0, value))
-            let px = rect.minX + rect.width * CGFloat(index) / CGFloat(max(1, values.count - 1))
-            let py = rect.maxY - rect.height * CGFloat(fraction)
-            if index == 0 {
-                path.move(to: NSPoint(x: px, y: py))
-            } else {
-                path.line(to: NSPoint(x: px, y: py))
-            }
-        }
-        NSColor.labelColor.withAlphaComponent(0.85).setStroke()
-        path.lineWidth = 1.1
-        path.lineJoinStyle = .round
-        path.stroke()
     }
 }
