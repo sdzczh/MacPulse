@@ -1,16 +1,14 @@
 import AppKit
 import Combine
-import SwiftUI
 import MacPulseCore
 
-final class StatusItemController: NSObject, NSPopoverDelegate {
+final class StatusItemController: NSObject {
     private let engine: MetricsEngine
     private let settings: AppSettings
     private let statusItem: NSStatusItem
     private let renderer = StatusItemRenderer()
-    private let popover = NSPopover()
+    private var detailsWindowController: DashboardWindowController?
     private var cancellables: Set<AnyCancellable> = []
-    private var lastPopoverClose = Date.distantPast
 
     var onOpenSettings: (() -> Void)?
 
@@ -39,10 +37,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             renderer.bottomAnchor.constraint(equalTo: button.bottomAnchor)
         ])
 
-        popover.behavior = .transient
-        popover.animates = true
-        popover.delegate = self
-
         engine.$state
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refresh() }
@@ -62,64 +56,32 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if NSApp.currentEvent?.type == .rightMouseUp {
             showContextMenu()
         } else {
-            togglePopover()
+            presentDetails()
         }
     }
 
-    private func togglePopover() {
-        if popover.isShown {
-            dismissPopover()
-            return
-        }
-        if Date().timeIntervalSince(lastPopoverClose) < 0.2 {
-            return
-        }
-        showPopover()
-    }
-
-    private func showPopover() {
-        guard let button = statusItem.button else { return }
-
-        if popover.contentViewController == nil {
-            let dashboard = DashboardView(
+    private func presentDetails() {
+        if detailsWindowController == nil {
+            detailsWindowController = DashboardWindowController(
                 engine: engine,
                 settings: settings,
                 onOpenSettings: { [weak self] in
-                    self?.dismissPopover()
+                    self?.detailsWindowController?.close()
                     self?.onOpenSettings?()
                 },
                 onQuit: {
                     NSApp.terminate(nil)
                 }
             )
-            popover.contentViewController = NSHostingController(rootView: dashboard)
-            popover.contentSize = NSSize(width: 440, height: 760)
         }
-
-        engine.setDetailed(true)
-        NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-    }
-
-    private func dismissPopover() {
-        if popover.isShown {
-            popover.performClose(nil)
-        }
-        engine.setDetailed(false)
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        lastPopoverClose = Date()
-        engine.setDetailed(false)
-        // 关闭后释放 SwiftUI 视图树，避免隐藏面板每秒跟随采样刷新。
-        popover.contentViewController = nil
+        detailsWindowController?.present()
     }
 
     private func showContextMenu() {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
 
-        let openItem = NSMenuItem(title: "打开面板", action: #selector(openPopoverFromMenu), keyEquivalent: "")
+        let openItem = NSMenuItem(title: "打开详情窗口", action: #selector(openDetailsFromMenu), keyEquivalent: "")
         openItem.target = self
         menu.addItem(openItem)
 
@@ -140,12 +102,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
-    @objc private func openPopoverFromMenu() {
-        showPopover()
+    @objc private func openDetailsFromMenu() {
+        presentDetails()
     }
 
     @objc private func openSettingsFromMenu() {
-        dismissPopover()
+        detailsWindowController?.close()
         onOpenSettings?()
     }
 
