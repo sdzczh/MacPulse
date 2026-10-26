@@ -18,7 +18,7 @@ final class StatusItemRenderer: NSView {
     private let height: CGFloat = 22
     private let leading: CGFloat = 7
     private let trailing: CGFloat = 7
-    private let symbolWidth: CGFloat = 11
+    private let symbolWidth: CGFloat = 16
     private let symbolGap: CGFloat = 4
     private let segmentGap: CGFloat = 9
 
@@ -92,8 +92,8 @@ final class StatusItemRenderer: NSView {
             return cached
         }
 
-        let pointSize = NSSize(width: 11, height: 11)
-        let configuration = NSImage.SymbolConfiguration(pointSize: 10.5, weight: .regular)
+        let pointSize = NSSize(width: 16, height: 16)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
             .applying(NSImage.SymbolConfiguration(hierarchicalColor: .labelColor))
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else {
@@ -147,7 +147,7 @@ final class StatusItemRenderer: NSView {
         for segment in segments {
             if let image = symbolImage(segment.symbolName) {
                 let symbolRect = NSRect(x: x, y: (height - symbolWidth) / 2, width: symbolWidth, height: symbolWidth)
-                image.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 0.62)
+                image.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 0.95)
             }
             x += symbolWidth + symbolGap
 
