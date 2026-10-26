@@ -44,6 +44,7 @@ macOS 菜单栏系统资源监控工具：CPU、内存、风扇、温度、GPU�
 ```bash
 ./scripts/run.sh          # release 构建、组装 .app 并启动
 ./scripts/build-app.sh    # 只生成 dist/MacPulse.app
+./scripts/install.sh      # 构建并安装到 /Applications，供启动台启动
 ./scripts/test.sh         # 84 项逻辑与硬件自检
 ```
 
@@ -54,6 +55,16 @@ swift run MacPulse --probe
 ```
 
 产物为 `dist/MacPulse.app`，使用 ad-hoc 签名。首次打开如被 Gatekeeper 拦截，可在「系统设置 → 隐私与安全性」中放行。
+
+## 安装到启动台
+
+```bash
+./scripts/install.sh
+```
+
+脚本会结束正在运行的实例，把 release 版本安装到 `/Applications/MacPulse.app` 并注册到 LaunchServices。之后按 F4 或触控板四指捏合打开启动台，点击 MacPulse 即可启动；也可以把它从「其它」文件夹拖到第一页。
+
+App 使用 `LSUIElement`，启动后没有 Dock 图标，只出现在菜单栏右侧。安装到「应用程序」后，设置里的「开机启动」才能正常注册。卸载：退出菜单栏实例后执行 `rm -rf /Applications/MacPulse.app`。若启动台暂时没显示，执行 `killall Dock` 刷新即可（不会重置启动台布局）。
 
 ## 架构
 
@@ -74,7 +85,7 @@ Sources/
 │   ├── UI/                         仪表盘、设置、设计系统
 │   └── AppSettings.swift           偏好持久化、开机启动
 ├── Tests/MacPulseChecks/ 无 XCTest 依赖的断言式自检
-└── scripts/              打包、运行、测试、图标生成
+└── scripts/              打包、运行、安装到 /Applications、测试、图标生成
 ```
 
 采样节奏：
