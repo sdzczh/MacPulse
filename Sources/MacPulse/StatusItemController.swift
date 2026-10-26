@@ -216,7 +216,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             let hidden = segments.count - visibleCount
             let candidate = Array(segments.prefix(visibleCount)) + [
                 StatusSegment(
-                    symbolName: "ellipsis",
                     text: "+\(hidden)",
                     reserveText: "+\(segments.count)"
                 )
@@ -235,7 +234,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showCPU {
             segments.append(
                 StatusSegment(
-                    symbolName: "cpu",
                     text: MetricFormat.percent(snapshot.cpu.totalUsage),
                     reserveText: "100%",
                     emphasized: true
@@ -246,7 +244,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showMemory {
             segments.append(
                 StatusSegment(
-                    symbolName: "memorychip",
                     text: MetricFormat.memoryCompact(snapshot.memory.usedBytes),
                     reserveText: MetricFormat.memoryCompact(engine.hardware.totalMemoryBytes)
                 )
@@ -256,7 +253,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showTemperature {
             segments.append(
                 StatusSegment(
-                    symbolName: "thermometer.medium",
                     text: settings.temperatureUnit.shortString(celsius: snapshot.thermal.cpuAverageCelsius),
                     reserveText: settings.temperatureUnit == .celsius ? "100°" : "212°"
                 )
@@ -267,7 +263,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             let maxRPM = snapshot.fans.map(\.maxRPM).max() ?? fan.maxRPM
             segments.append(
                 StatusSegment(
-                    symbolName: "fanblades",
                     text: MetricFormat.rpm(fan.rpm),
                     reserveText: MetricFormat.rpm(maxRPM)
                 )
@@ -277,7 +272,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showGPU, let gpu = snapshot.gpu {
             segments.append(
                 StatusSegment(
-                    symbolName: "display",
                     text: MetricFormat.percent(gpu.utilization),
                     reserveText: "100%"
                 )
@@ -288,7 +282,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             let text = "↓\(MetricFormat.rateCompact(snapshot.network.downloadBytesPerSecond)) ↑\(MetricFormat.rateCompact(snapshot.network.uploadBytesPerSecond))"
             segments.append(
                 StatusSegment(
-                    symbolName: "arrow.up.arrow.down",
                     text: text,
                     reserveText: "↓999M ↑999M"
                 )
@@ -298,7 +291,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showDisk {
             segments.append(
                 StatusSegment(
-                    symbolName: "internaldrive",
                     text: MetricFormat.percent(snapshot.disk.usedFraction),
                     reserveText: "100%"
                 )
@@ -308,7 +300,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if settings.showBattery, let battery = snapshot.battery {
             segments.append(
                 StatusSegment(
-                    symbolName: batterySymbol(for: battery),
                     text: "\(battery.percentage)%",
                     reserveText: "100%"
                 )
@@ -318,7 +309,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if segments.isEmpty {
             segments.append(
                 StatusSegment(
-                    symbolName: "waveform.path.ecg",
                     text: "MacPulse",
                     reserveText: "MacPulse",
                     emphasized: true
@@ -327,18 +317,5 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         }
 
         return segments
-    }
-
-    private func batterySymbol(for battery: BatterySnapshot) -> String {
-        if battery.isCharging {
-            return "battery.100.bolt"
-        }
-        switch battery.percentage {
-        case 88...: return "battery.100"
-        case 63...: return "battery.75percent"
-        case 38...: return "battery.50percent"
-        case 13...: return "battery.25percent"
-        default: return "battery.0percent"
-        }
     }
 }
