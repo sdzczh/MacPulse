@@ -42,90 +42,28 @@ enum DetailSeverity {
     }
 }
 
-struct DetailCard<Content: View>: View {
-    let title: String
-    let icon: String
-    let accent: Color
-    let severity: DetailSeverity
-    let note: String?
-    let emphasized: Bool
+struct DetailSurface<Content: View>: View {
+    var padding: CGFloat = 16
     let content: Content
 
-    init(
-        title: String,
-        icon: String,
-        accent: Color,
-        severity: DetailSeverity = .normal,
-        note: String? = nil,
-        emphasized: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.icon = icon
-        self.accent = accent
-        self.severity = severity
-        self.note = note
-        self.emphasized = emphasized
+    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+        self.padding = padding
         self.content = content()
     }
 
-    private var borderColor: Color {
-        switch severity {
-        case .warning, .critical:
-            return severity.color.opacity(0.42)
-        case .normal, .neutral:
-            return accent.opacity(emphasized ? 0.42 : 0.16)
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(accent)
-                    .frame(width: 15, alignment: .leading)
-
-                Text(title)
-                    .font(.label(11.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 6)
-
-                if let note {
-                    Text(note)
-                        .font(.label(9, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-
-                Image(systemName: severity.glyph)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundStyle(severity.color)
-                    .help(severity.label)
-                    .accessibilityLabel(severity.label)
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
             }
-
-            content
-
-            Spacer(minLength: 0)
-        }
-        .padding(emphasized ? 16 : 14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(borderColor, lineWidth: emphasized ? 1.5 : 1)
-        }
-        .shadow(
-            color: emphasized ? accent.opacity(0.13) : Color.black.opacity(0.05),
-            radius: emphasized ? 10 : 4,
-            x: 0,
-            y: 2
-        )
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -156,7 +94,6 @@ struct DetailGaugeView: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(135))
-                .animation(.easeOut(duration: 0.35), value: clamped)
 
             Text(text)
                 .font(.metric(textSize, weight: .bold))
@@ -491,6 +428,7 @@ struct DetailCoreBarsView: View {
     let usages: [Double]
     let efficiencyCoreCount: Int
     let color: Color
+    var barHeight: CGFloat = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -513,9 +451,9 @@ struct DetailCoreBarsView: View {
                                 .fill(color.opacity(0.09))
                             RoundedRectangle(cornerRadius: 2, style: .continuous)
                                 .fill(color.opacity(index < efficiencyCoreCount ? 0.45 : 0.92))
-                                .frame(height: max(1.5, 20 * CGFloat(clamp(usage))))
+                                .frame(height: max(1.5, barHeight * CGFloat(clamp(usage))))
                         }
-                        .frame(height: 20)
+                        .frame(height: barHeight)
 
                         Text("\(index + 1)")
                             .font(.mono(6.5, weight: .medium))
@@ -535,68 +473,6 @@ struct DetailCoreBarsView: View {
             Text(text)
                 .font(.label(8))
                 .foregroundStyle(.quaternary)
-        }
-    }
-}
-
-struct DetailStatRow: View {
-    let label: String
-    let value: String
-    var valueColor: Color = .secondary
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .foregroundStyle(.tertiary)
-            Spacer(minLength: 6)
-            Text(value)
-                .foregroundStyle(valueColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .font(.mono(10.5))
-    }
-}
-
-struct DetailStatGroup<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.06))
-                .frame(height: 1)
-                .padding(.bottom, 6)
-            content
-        }
-    }
-}
-
-struct DetailRateStat: View {
-    let title: String
-    let value: String
-    let color: Color
-    let icon: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 8.5, weight: .bold))
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.label(9.5, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
-            Text(value)
-                .font(.metric(23, weight: .bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
         }
     }
 }

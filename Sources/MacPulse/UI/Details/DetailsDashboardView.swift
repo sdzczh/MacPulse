@@ -1,11 +1,49 @@
 import SwiftUI
 import MacPulseCore
 
-enum DetailTab: String, CaseIterable, Identifiable {
-    case overview = "概览"
+enum DetailCategory: String, CaseIterable, Identifiable {
+    case cpu = "处理器"
+    case memory = "内存"
+    case gpu = "图形处理器"
+    case network = "网络"
+    case disk = "存储"
+    case thermal = "温度"
+    case fan = "风扇"
+    case battery = "电池"
+    case system = "系统"
     case processes = "进程"
 
     var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .cpu: return "cpu"
+        case .memory: return "memorychip"
+        case .gpu: return "display"
+        case .network: return "arrow.up.arrow.down"
+        case .disk: return "internaldrive"
+        case .thermal: return "thermometer.medium"
+        case .fan: return "fanblades"
+        case .battery: return "battery.100"
+        case .system: return "info.circle"
+        case .processes: return "list.bullet.rectangle"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .cpu: return Palette.cpu
+        case .memory: return Palette.memory
+        case .gpu: return Palette.gpu
+        case .network: return Palette.network
+        case .disk: return Palette.disk
+        case .thermal: return Palette.thermal
+        case .fan: return Palette.fan
+        case .battery: return Palette.battery
+        case .system: return Palette.upload
+        case .processes: return Palette.memory
+        }
+    }
 }
 
 enum DetailDensity: String, CaseIterable, Identifiable {
@@ -21,7 +59,7 @@ struct DetailsDashboardView: View {
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
-    @State private var tab: DetailTab = .overview
+    @State private var category: DetailCategory = .cpu
     @State private var density: DetailDensity = .detailed
 
     private var state: MetricsState { engine.state }
@@ -48,25 +86,37 @@ struct DetailsDashboardView: View {
                 Hairline()
                     .opacity(0.8)
 
-                Group {
-                    switch tab {
-                    case .overview:
-                        DetailsOverviewView(
+                HStack(spacing: 0) {
+                    DetailSidebar(
+                        selection: $category,
+                        snapshot: state.snapshot,
+                        unit: settings.temperatureUnit
+                    )
+
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: 1)
+
+                    VStack(spacing: 0) {
+                        if let error = state.lastError {
+                            errorBanner(error)
+                                .padding(.horizontal, 24)
+                                .padding(.top, 12)
+                        }
+
+                        DetailsCategoryView(
+                            category: category,
                             state: state,
                             hardware: engine.hardware,
                             settings: settings,
-                            density: density,
-                            onQuit: onQuit
+                            density: density
                         )
-                    case .processes:
-                        DetailsProcessesView(
-                            processes: state.snapshot.processes,
-                            isDetailed: state.isDetailed,
-                            interval: state.samplingInterval
-                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        Hairline()
+                        footer
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 960, minHeight: 640)
@@ -78,16 +128,7 @@ struct DetailsDashboardView: View {
 
             Spacer(minLength: 8)
 
-            DetailSegmentControl(
-                items: DetailTab.allCases,
-                selection: $tab,
-                title: { $0.rawValue }
-            )
-            .frame(width: 146)
-
-            Spacer(minLength: 8)
-
-            if tab == .overview {
+            if category != .processes {
                 DetailSegmentControl(
                     items: DetailDensity.allCases,
                     selection: $density,
@@ -180,8 +221,185 @@ struct DetailsDashboardView: View {
         .help("在设置中调整刷新间隔")
     }
 
+    private var footer: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(Palette.network)
+                .frame(width: 4.5, height: 4.5)
+            Text("历史 \(historyWindowText) · \(state.history.cpu.count) 个采样")
+            Text("·")
+            Text("SMC / IOKit 只读")
+            Text("·")
+            Text("仅渲染当前页面")
+            Spacer(minLength: 4)
+            Text("MacPulse \(version)")
+            Button("退出", action: onQuit)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+        }
+        .font(.label(8.5))
+        .foregroundStyle(.tertiary)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 7)
+    }
+
+    private var historyWindowText: String {
+        guard state.history.timestamps.count > 1,
+              let first = state.history.timestamps.first,
+              let last = state.history.timestamps.last else {
+            return "等待历史数据"
+        }
+        let seconds = max(0, last.timeIntervalSince(first))
+        if seconds >= 120 {
+            return "最近 \(Int((seconds / 60).rounded())) 分钟"
+        }
+        return "最近 \(Int(seconds.rounded())) 秒"
+    }
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .semibold))
+            Text(message)
+                .font(.label(10))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Palette.warning)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Palette.warning.opacity(0.11))
+        }
+    }
+
     private func formattedInterval(_ interval: TimeInterval) -> String {
         interval < 1 ? String(format: "%.1f", interval) : String(format: "%.0f", interval)
+    }
+}
+
+private struct DetailSidebar: View {
+    @Binding var selection: DetailCategory
+    let snapshot: SystemSnapshot
+    let unit: TemperatureUnit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("监控页面")
+                .font(.label(9, weight: .semibold))
+                .foregroundStyle(.quaternary)
+                .padding(.horizontal, 13)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 2) {
+                ForEach(DetailCategory.allCases) { item in
+                    row(item)
+                }
+            }
+            .padding(.horizontal, 10)
+
+            Spacer(minLength: 12)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Palette.network)
+                        .frame(width: 4.5, height: 4.5)
+                    Text("只读采样")
+                        .font(.label(8.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                Text("每次只构建一个页面")
+                    .font(.label(8.5))
+                    .foregroundStyle(.quaternary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 16)
+        }
+        .frame(width: 172)
+        .frame(maxHeight: .infinity)
+        .background(Color.primary.opacity(0.012))
+    }
+
+    private func row(_ item: DetailCategory) -> some View {
+        let active = selection == item
+        return Button {
+            selection = item
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(active ? item.accent : Color.secondary)
+                    .frame(width: 16)
+
+                Text(item.rawValue)
+                    .font(.label(11.5, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? Color.primary : Color.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                if let badge = badge(for: item) {
+                    Text(badge)
+                        .font(.mono(8.5, weight: .medium))
+                        .foregroundStyle(active ? item.accent : Color.secondary.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 31)
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(item.accent.opacity(0.13))
+                }
+            }
+            .overlay {
+                if active {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(item.accent.opacity(0.22), lineWidth: 1)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(item.rawValue)
+    }
+
+    private func badge(for item: DetailCategory) -> String? {
+        switch item {
+        case .cpu:
+            return String(format: "%.0f%%", snapshot.cpu.totalUsage * 100)
+        case .memory:
+            return String(format: "%.0f%%", snapshot.memory.usedFraction * 100)
+        case .gpu:
+            guard let gpu = snapshot.gpu else { return "--" }
+            return String(format: "%.0f%%", gpu.utilization * 100)
+        case .network:
+            return MetricFormat.rateCompact(snapshot.network.downloadBytesPerSecond)
+        case .disk:
+            return String(format: "%.0f%%", snapshot.disk.usedFraction * 100)
+        case .thermal:
+            guard let celsius = snapshot.thermal.cpuAverageCelsius else { return "--" }
+            return String(format: "%.0f°", unit.convert(celsius: celsius))
+        case .fan:
+            guard let fan = snapshot.fans.first else { return "--" }
+            return String(format: "%.0f", fan.rpm)
+        case .battery:
+            guard let battery = snapshot.battery else { return "--" }
+            return "\(battery.percentage)%"
+        case .system:
+            return nil
+        case .processes:
+            guard !snapshot.processes.isEmpty else { return nil }
+            return "\(snapshot.processes.count)"
+        }
     }
 }
 
